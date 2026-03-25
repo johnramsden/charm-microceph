@@ -17,3 +17,8 @@ parts:
       - pkg-config
       - rustc-1.80
       - cargo-1.80
+    charm-binary-python-packages:
+      # TODO: remove once the setuptools-scm circular build dependency
+      # issue is fully resolved upstream.
+      # See https://github.com/pypa/setuptools-scm/issues/1302
+      - ops
