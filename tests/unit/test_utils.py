@@ -152,3 +152,51 @@ class TestNormalizeIp(unittest.TestCase):
         }
         for addr, expected in cases.items():
             self.assertEqual(utils._normalize_ip(addr), expected, addr)
+
+
+class TestInertWhenDeparting(unittest.TestCase):
+    """inert_when_departing skips handlers during whole-app teardown."""
+
+    class FakeCharm:
+        """Stands in for a charm method owner, exposing ``self.app``."""
+
+        def __init__(self, planned_units):
+            self.app = MagicMock()
+            self.app.planned_units.return_value = planned_units
+
+        @utils.inert_when_departing(context="charm work")
+        def handler(self, event):
+            return "ran"
+
+    class FakeHandler:
+        """Stands in for a relation handler, exposing ``self.charm.app``."""
+
+        def __init__(self, planned_units):
+            self.charm = MagicMock()
+            self.charm.app.planned_units.return_value = planned_units
+
+        @utils.inert_when_departing(context="handler work")
+        def handler(self, event):
+            return "ran"
+
+    def test_charm_method_runs_normally(self):
+        self.assertEqual(self.FakeCharm(planned_units=3).handler(MagicMock()), "ran")
+
+    def test_charm_method_inert_on_teardown(self):
+        self.assertIsNone(self.FakeCharm(planned_units=0).handler(MagicMock()))
+
+    def test_handler_method_runs_normally(self):
+        self.assertEqual(self.FakeHandler(planned_units=3).handler(MagicMock()), "ran")
+
+    def test_handler_method_inert_on_teardown(self):
+        self.assertIsNone(self.FakeHandler(planned_units=0).handler(MagicMock()))
+
+    def test_fails_safe_when_planned_units_unreadable(self):
+        """A broken planned_units read must not stop the handler running."""
+        owner = self.FakeCharm(planned_units=1)
+        owner.app.planned_units.side_effect = RuntimeError("model gone")
+        self.assertEqual(owner.handler(MagicMock()), "ran")
+
+    def test_wrapped_metadata_preserved(self):
+        """functools.wraps keeps the handler observable by name."""
+        self.assertEqual(self.FakeCharm.handler.__name__, "handler")

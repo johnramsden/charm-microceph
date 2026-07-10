@@ -16,6 +16,7 @@
 
 """Utils module."""
 
+import functools
 import ipaddress
 import logging
 import subprocess
@@ -96,6 +97,35 @@ def is_departing(app, context: str = "") -> bool:
         suffix = f" during {context}" if context else ""
         logger.warning("Could not determine planned units%s: %s", suffix, e)
         return False
+
+
+def inert_when_departing(context: str):
+    """Make a handler a no-op while the application is being removed.
+
+    Decorator for event handlers and callbacks that must not touch the
+    cluster during whole-application teardown: quorum is being dismantled
+    concurrently, so cluster calls would error or hang, and there is no
+    point reconciling state that is about to be destroyed. The wrapped
+    function is skipped entirely and None is returned.
+
+    Applies to methods of the charm itself (``self.app``) and of handler
+    objects holding a charm reference (``self.charm.app``).
+
+    :param context: what is being skipped, for the log line.
+    """
+
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(self, *args, **kwargs):
+            app = getattr(self, "charm", self).app
+            if is_departing(app, context=context):
+                logger.info("Application is being removed; skipping %s", context)
+                return None
+            return func(self, *args, **kwargs)
+
+        return wrapper
+
+    return decorator
 
 
 def get_mon_addresses():

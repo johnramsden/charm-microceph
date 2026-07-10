@@ -142,15 +142,14 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
 
         return False
 
+    @utils.inert_when_departing(context="cluster removal on stop")
     def _on_stop(self, event: ops.StopEvent):
-        """Removes departing unit from the MicroCeph cluster forcefully."""
-        hostname = gethostname()
+        """Removes departing unit from the MicroCeph cluster forcefully.
 
-        # Whole-application teardown: when the entire application is removed quorum
-        # can be lost if nodes race - skip cleanup
-        if utils.is_departing(self.app, context="stop"):
-            logger.info("Application is being removed; skipping cluster removal for %s", hostname)
-            return
+        Inert on whole-application teardown: when the entire application is
+        removed, quorum can be lost if nodes race - skip cleanup.
+        """
+        hostname = gethostname()
 
         try:
             if microceph.cluster_member_count() <= 1:
@@ -175,12 +174,9 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
             if microceph.is_cluster_member(hostname):
                 raise e
 
+    @utils.inert_when_departing(context="update-status")
     def _on_update_status(self, event: ops.framework.EventBase) -> None:
         """Update status event handler."""
-        if utils.is_departing(self.app):
-            logger.info("Application is being removed; skipping update-status")
-            return
-
         snap_chan = self.model.config.get("snap-channel")
         # Cleanup can run on all units, including units that are no longer leader.
         self._clear_resolved_upgrade_blocked_status(snap_chan)
@@ -240,6 +236,7 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
     def _on_peer_relation_departed(self, event: ops.framework.EventBase) -> None:
         self.handle_traefik_ready(event)
 
+    @utils.inert_when_departing(context="reconcile")
     def configure_charm(self, event: ops.framework.EventBase) -> None:
         """Reconcile the charm, unless the application is being torn down.
 
@@ -247,9 +244,6 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
         teardown, so the cluster calls made here would error or hang. Gating the
         main reconcile entry point keeps a departing unit inert.
         """
-        if utils.is_departing(self.app):
-            logger.info("Application is being removed; skipping reconcile")
-            return
         super().configure_charm(event)
 
     def configure_unit(self, event: ops.framework.EventBase) -> None:
@@ -813,12 +807,9 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
             # if integration with identity_service is not yet set.
             logger.warning(f"Identity service relation not integrated: {str(e)}")
 
+    @utils.inert_when_departing(context="traefik route update")
     def handle_traefik_ready(self, event: ops.framework.EventBase):
         """Handle Traefik route ready callback."""
-        if utils.is_departing(self.app):
-            logger.debug("Application is being removed; skipping traefik route update")
-            return
-
         if not self.unit.is_leader():
             logger.debug("Not a leader unit, not updating traefik route config")
             return

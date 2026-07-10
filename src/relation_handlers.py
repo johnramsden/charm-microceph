@@ -664,15 +664,13 @@ class CephClientProvides(Object):
         for k, v in data.items():
             relation.data[self.this_unit][k] = str(v)
 
+    @utils.inert_when_departing(context="mon address update")
     def _mon_addresses_to_publish(self):
         """Return cross-checked mon addresses to publish, or None to skip.
 
         Guards here so every caller (relation-changed, peers, update-status) is
         protected from running before the microceph API is up or during teardown.
         """
-        if utils.is_departing(self.charm.app):
-            logger.debug("Application is being removed; skipping mon address update")
-            return None
         if not self.charm.ready_for_service():
             logger.debug("Service not ready; skipping mon address update")
             return None

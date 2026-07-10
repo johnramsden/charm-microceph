@@ -121,8 +121,15 @@ class StorageHandler(Object):
             self.storage_status.set(ActiveStatus(""))
             self._restore_ready_workload_status()
 
+    @utils.inert_when_departing(context="OSD removal on storage detach")
     def _on_storage_detaching(self, event: StorageDetachingEvent):
-        """Unified storage detaching handler."""
+        """Unified storage detaching handler.
+
+        Inert on whole-application teardown: the cluster is being destroyed,
+        so removing OSDs from it is pointless and will hang once the cluster
+        drops below quorum (the disk operations are dqlite-backed). Skip and
+        let Juju deprovision the storage.
+        """
         # check if the detaching device (of the form directive/index)
         # is being used as or with an OSD.
         logger.debug(f"Detach event received for : {event.storage.full_id}")
@@ -130,14 +137,6 @@ class StorageHandler(Object):
 
         logger.debug(f"OSD ID for: {event.storage.full_id} is {osd_num}")
         if osd_num is None:
-            return
-
-        # Whole-application teardown: when the entire application is being removed
-        # the cluster is being destroyed, so removing OSDs from it is pointless and
-        # will hang once the cluster drops below quorum (the disk operations are
-        # dqlite-backed). Skip and let Juju deprovision the storage.
-        if utils.is_departing(self.charm.app, context="storage detach"):
-            logger.info("Application is being removed; skipping OSD removal for osd.%s", osd_num)
             return
 
         with sunbeam_guard.guard(self._storage_guard, self.name):

@@ -116,11 +116,9 @@ class CephNfsProvides(Object):
         logger.info("_on_relation_departed event")
         self.on.ceph_nfs_departed.emit(event.relation)
 
+    @utils.inert_when_departing(context="ceph-nfs reconcile")
     def _on_ceph_peers(self, event):
         """Handle ceph peers relation events."""
-        if utils.is_departing(self.charm.app):
-            logger.debug("Application is being removed; skipping ceph-nfs reconcile")
-            return
         if not self.model.unit.is_leader():
             return
 
@@ -366,11 +364,8 @@ class CephNfsProviderHandler(RelationHandler):
 
         ceph.create_fs_volume(volume_name)
 
+    @utils.inert_when_departing(context="ceph-nfs departed cleanup")
     def _on_ceph_nfs_departed(self, event: EventBase) -> None:
-        if utils.is_departing(self.charm.app):
-            logger.debug("Application is being removed; skipping ceph-nfs departed cleanup")
-            return
-
         if not self.model.unit.is_leader():
             return
 
