@@ -75,8 +75,36 @@ jobs:
           name: charms
           path: "*.charm"
 
+  # Infra gate for the self-hosted matrix: on a gross Snap Store, Ubuntu
+  # archive or CharmHub outage, fail this one job and skip every suite
+  # instead of recording one failure per suite on the ci-health dashboard.
+  # Modeled on canonical/microceph's preflight gate
+  # (https://github.com/canonical/microceph/pull/852). It cannot see
+  # inside the LXD instances/VMs the suites create later.
+  preflight:
+    name: Preflight infra gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # The probes live in a script so other branches and workflows can reuse them.
+      - name: Checkout preflight script
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: tests/scripts/preflight.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Probe Snap Store, Ubuntu archive and CharmHub reachability
+        run: ./tests/scripts/preflight.sh probe_endpoints
+
+      - name: Download Snap Store canary
+        run: ./tests/scripts/preflight.sh snap_canary
+
+      - name: Resolve CharmHub canary charms
+        run: ./tests/scripts/preflight.sh charmhub_canary microceph ceph-mon ceph-osd ceph-fs ceph-radosgw grafana-agent opentelemetry-collector cos-lite
+
   integration-test:
     needs:
+      - preflight
       - lint
       - unit-test
       - build
@@ -135,6 +163,7 @@ jobs:
 
   functional-test:
     needs:
+      - preflight
       - lint
       - unit-test
       - build
@@ -182,6 +211,7 @@ jobs:
 
   juju-cluster-test:
     needs:
+      - preflight
       - lint
       - unit-test
       - build
@@ -261,6 +291,7 @@ jobs:
 
   juju-cluster-maintenance-test:
     needs:
+      - preflight
       - lint
       - unit-test
       - build
@@ -551,6 +582,7 @@ jobs:
 
   juju-wipe-test:
     needs:
+      - preflight
       - lint
       - unit-test
       - build
@@ -596,6 +628,7 @@ jobs:
 
   juju-single-test:
     needs:
+      - preflight
       - lint
       - unit-test
       - build
@@ -697,6 +730,7 @@ jobs:
 
   snap-upgrade-test:
     needs:
+      - preflight
       - lint
       - unit-test
       - build
@@ -826,6 +860,7 @@ jobs:
 
   juju-network-spaces-test:
     needs:
+      - preflight
       - lint
       - unit-test
       - build
@@ -895,6 +930,7 @@ jobs:
 
   juju-mds-test:
     needs:
+      - preflight
       - lint
       - unit-test
       - build
@@ -968,6 +1004,7 @@ jobs:
 
   juju-remote-relation-test:
     needs:
+      - preflight
       - lint
       - unit-test
       - build
@@ -1064,6 +1101,7 @@ jobs:
 
   juju-adopt-ceph-test:
     needs:
+      - preflight
       - build
     name: Adopt Charmed ceph cluster test
     runs-on: self-hosted-linux-amd64-noble-xlarge
@@ -1165,6 +1203,7 @@ jobs:
 
   juju-storage-cluster-test:
     needs:
+      - preflight
       - lint
       - unit-test
       - build
@@ -1244,6 +1283,7 @@ jobs:
 
   az-fresh-deploy-test:
     needs:
+      - preflight
       - lint
       - unit-test
       - build
@@ -1306,6 +1346,7 @@ jobs:
 
   az-upgrade-test:
     needs:
+      - preflight
       - lint
       - unit-test
       - build
@@ -1376,6 +1417,7 @@ jobs:
 
   cos-integration-test:
     needs:
+      - preflight
       - lint
       - unit-test
       - build
@@ -1554,6 +1596,7 @@ jobs:
 
   charm-upgrade-test:
     needs:
+      - preflight
       - lint
       - unit-test
       - build
